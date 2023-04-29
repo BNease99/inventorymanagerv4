@@ -13,66 +13,120 @@ from tkinter.font import Font
 import random
 from tkinter import simpledialog, messagebox, Button, Tk
 from collections import defaultdict
+import tkinter as tk
+from tkinter import messagebox
+import time
 
 
 
 DATABASE = "inventory.db"
-def update_database_schema():
-    conn = sqlite3.connect(DATABASE)
-    c = conn.cursor()
 
-    # Check if the transaction_id column already exists
-    c.execute("PRAGMA table_info(transactions)")
-    columns = c.fetchall()
-    column_names = [col[1] for col in columns]
+class CustomDialog(simpledialog.Dialog):
+    def __init__(self, parent, title=None, prompt=None, input_type='string'):
+        self.prompt = prompt
+        self.result = None
+        self.input_type = input_type
+        super().__init__(parent, title=title)
 
-    if 'transaction_id' not in column_names:
-        c.execute("ALTER TABLE transactions ADD COLUMN transaction_id INTEGER")
+    def body(self, master):
+        tk.Label(master, text=self.prompt).grid(row=0)
+        self.entry = tk.Entry(master)
+        self.entry.grid(row=1)
 
-    conn.commit()
-    conn.close()
+        # Set focus after a delay of 100ms
+        self.entry.focus_set()
+        self.entry.after(100, self.entry.focus_set)
 
-# Call the function to update the schema at the beginning of your script
-update_database_schema()
+    def apply(self):
+        if self.input_type == 'integer':
+            try:
+                self.result = int(self.entry.get())
+            except ValueError:
+                self.result = None
+        else:
+            self.result = self.entry.get()
+
+    def show(self):
+        self.attributes('-topmost', True)
+        return self.result
+
+class IntegerDialog(CustomDialog):
+    def __init__(self, parent, title, prompt):
+        super().__init__(parent, title, prompt)
+
+    def create_widgets(self):
+        self.label = tk.Label(self.top, text=self.prompt, font=self.font)
+        self.label.pack(side=tk.TOP, pady=10)
+
+        self.entry = tk.Entry(self.top, font=self.font, validate="key")
+        self.entry.configure(validatecommand=(self.entry.register(self.validate_integer), "%P"))
+        self.entry.pack(side=tk.TOP)
+
+        self.ok_button = tk.Button(self.top, text="OK", font=self.font, command=self.on_ok)
+        self.ok_button.pack(side=tk.LEFT, padx=10)
+
+        self.cancel_button = tk.Button(self.top, text="Cancel", font=self.font, command=self.on_cancel)
+        self.cancel_button.pack(side=tk.RIGHT)
+
+    def validate_integer(self, new_value):
+        if new_value == "":
+            return True
+        try:
+            int(new_value)
+            return True
+        except ValueError:
+            return False
+class DropdownDialog(CustomDialog):
+    def __init__(self, parent, title, prompt, items):
+        self.items = items
+        super().__init__(parent, title, prompt)
+
+    def body(self, master):
+        tk.Label(master, text=self.prompt).grid(row=0)
+        self.selected_item = tk.StringVar()
+        self.selected_item.set(self.items[0])  # Set the default selected item
+        self.dropdown = tk.OptionMenu(master, self.selected_item, *self.items)
+        self.dropdown.grid(row=1)
+
+    def apply(self):
+        self.result = self.selected_item.get()
 
 def create_tables():
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
 
+
     c.execute("""
-    CREATE TABLE IF NOT EXISTS items (
-        id INTEGER PRIMARY KEY,
-        barcode TEXT UNIQUE,
-        name TEXT,
-        checked_out INTEGER DEFAULT 0,
-        checked_out_by TEXT,
-        quantity INTEGER DEFAULT 0,
-        FOREIGN KEY (checked_out_by) REFERENCES users (id_number)
-    );
+        CREATE TABLE IF NOT EXISTS items (
+            barcode TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            last_checkout INTEGER,
+            last_checkin INTEGER,
+            quantity INTEGER DEFAULT 0
+        )
     """)
 
     c.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY,
-        first_name TEXT,
-        last_name TEXT,
-        id_number TEXT UNIQUE
-    );
+        CREATE TABLE IF NOT EXISTS users (
+            id_number TEXT PRIMARY KEY,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL
+        )
     """)
 
-
     c.execute("""
-    CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY,
-    barcode TEXT,
-    user_id_number INTEGER,
-    staff_name TEXT,
-    checkout_date TIMESTAMP,
-    checkin_date TIMESTAMP,
-    quantity INTEGER,  -- Add the quantity column
-    FOREIGN KEY (barcode) REFERENCES items (barcode),
-    FOREIGN KEY (user_id_number) REFERENCES users (id_number)
-    );
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            barcode TEXT NOT NULL,
+            user_id_number TEXT NOT NULL,
+            staff_name TEXT NOT NULL,
+            checkout_date TEXT,
+            checkin_date TEXT,
+            quantity INTEGER,
+            transaction_id INTEGER,
+            FOREIGN KEY (barcode) REFERENCES items (barcode),
+            FOREIGN KEY (user_id_number) REFERENCES users (id_number)
+        )
     """)
 
     conn.commit()
@@ -83,6 +137,7 @@ def create_tables():
 create_tables()
 
 def add_item(barcode, name):
+    print(f"Adding item with barcode: {barcode} and name: {name}")
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
 
@@ -97,15 +152,28 @@ def add_item(barcode, name):
 
 
 
+
 def remove_item(barcode):
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
 
-    c.execute("DELETE FROM items WHERE barcode=?", (barcode,))
-    conn.commit()
-    print("Item removed successfully!")
+    c.execute("SELECT * FROM items WHERE barcode=?", (barcode,))
+    item = c.fetchone()
+
+    if item:
+        c.execute("DELETE FROM items WHERE barcode=?", (barcode,))
+        conn.commit()
+        messagebox.showinfo("Item Removed", f"Item with barcode {barcode} removed successfully!")
+    else:
+        messagebox.showerror("Item Not Found", f"Item with barcode {barcode} not found.")
 
     conn.close()
+
+
+
+
+
+
 
 def check_out_batch(id_number):
     conn = sqlite3.connect(DATABASE)
@@ -146,19 +214,7 @@ def check_out_batch(id_number):
         print("User not found.")
 
     conn.close()
-import tkinter as tk
-from tkinter import messagebox
-import time
-
-import tkinter as tk
-from tkinter import messagebox
-import time
-
-import tkinter as tk
-from tkinter import messagebox
-import time
-
-def check_out_batch_gui(id_number, staff_name):
+def check_out_batch_gui(id_number, staff_name, main_window):
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
 
@@ -169,16 +225,19 @@ def check_out_batch_gui(id_number, staff_name):
         transaction_id = random.randint(1, 1000000)  # Generate a unique transaction_id for this batch
 
         while True:
-            barcode = simpledialog.askstring("Check Out Item", "Scan or enter the barcode (hit cancel to exit):")
+            barcode = simpledialog.askstring("Check Out Item", "Scan or enter the barcode (type 'done' to stop):",
+                                             parent=main_window)
+            print(f"Scanned barcode: {barcode}")  # Debugging print statement
 
             if barcode is None or barcode.lower() == 'done':
                 break
 
-            c.execute("SELECT * FROM items WHERE barcode=?", (barcode,))
+            c.execute("SELECT * FROM items WHERE barcode=?", (barcode.strip(),))
             item = c.fetchone()
+            print(f"Fetched item: {item}")  # Debugging print statement
 
             if item:
-                current_quantity = item[5]
+                current_quantity = item[4]
                 checkout_quantity = 1  # Assume a single item is checked out
 
                 if current_quantity >= checkout_quantity:
@@ -265,6 +324,9 @@ def create_tables():
     conn.commit()
     conn.close()
 
+import datetime
+import pytz
+
 def show_user_transactions():
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
@@ -298,8 +360,15 @@ def show_user_transactions():
         text_box.insert(tk.END, "User Transactions:\n\n")
         for transaction in transactions:
             staff_name, checkout_date, transaction_id, id_number, first_name, last_name, item_details = transaction
+
+            # Convert checkout_date from UTC to local time
+            utc_datetime = datetime.datetime.strptime(checkout_date, "%Y-%m-%d %H:%M:%S")
+            local_timezone = pytz.timezone('HST')  # Replace 'Your_Local_Timezone' with the desired timezone
+            local_datetime = utc_datetime.replace(tzinfo=pytz.utc).astimezone(local_timezone)
+            formatted_checkout_date = local_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
             text_box.insert(tk.END,
-                            f"Staff Name: {staff_name}\nCheckout Date: {checkout_date}\nTransaction ID: {transaction_id}\n"
+                            f"Staff Name: {staff_name}\nCheckout Date: {formatted_checkout_date}\nTransaction ID: {transaction_id}\n"
                             f"User ID: {id_number}\nMember: {first_name} {last_name}\nItems: {item_details}\n\n")
     else:
         messagebox.showinfo("User Transactions", "No transactions found.")
@@ -408,12 +477,22 @@ def check_quantity(barcode):
 
     if item:
         name = item[2]
-        quantity = item[5]
+        quantity = item[4]
         messagebox.showinfo("Check Quantity", f"Item: {name} (Barcode: {barcode})\nQuantity: {quantity}")
     else:
         messagebox.showerror("Check Quantity", "Item not found.")
 
     conn.close()
+def get_all_items():
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+
+    c.execute("SELECT barcode, name FROM items")
+    items = c.fetchall()
+
+    conn.close()
+
+    return items
 
 
 def add_quantity(barcode, quantity):
@@ -422,7 +501,7 @@ def add_quantity(barcode, quantity):
     c.execute("SELECT * FROM items WHERE barcode=?", (barcode,))
     item = c.fetchone()
     if item:
-        current_quantity = item[5]  # Get the current quantity
+        current_quantity = item[4]  # Get the current quantity
         new_quantity = current_quantity + quantity
         c.execute("UPDATE items SET quantity=? WHERE barcode=?", (new_quantity, barcode))
         conn.commit()
@@ -439,7 +518,7 @@ def remove_quantity(barcode, quantity):
     item = c.fetchone()
 
     if item:
-        current_quantity = item[5]  # Get the current quantity
+        current_quantity = item[4]  # Get the current quantity
 
         if current_quantity >= quantity:
             new_quantity = current_quantity - quantity
@@ -566,9 +645,10 @@ def create_gui():
 
     bold_font = Font(weight="bold")
 
-
     for i, (text, option) in enumerate(options):
-        button = tk.Button(button_frame, text=text, command=lambda option=option: on_button_click(option), height=5, width=42, bg="dim gray", fg="white", font=bold_font)
+        button = tk.Button(button_frame, text=text,
+                           command=lambda option=option, parent=window: on_button_click(option, parent), height=5,
+                           width=42, bg="dim gray", fg="white", font=bold_font)
         button.grid(row=i // num_columns, column=i % num_columns, padx=10, pady=10)
 
     # Center the button frame within the window using pack()
@@ -579,76 +659,125 @@ def create_gui():
 
     window.mainloop()
 
-def on_button_click(option):
+def on_button_click(option, parent):
     if option == 1:
-        barcode = simpledialog.askstring("Add Item", "Enter the barcode:")
+        barcode_dialog = CustomDialog(parent, title="Add Item", prompt="Enter the barcode:")
+        barcode = barcode_dialog.result
         if barcode is None:
             return
-        name = simpledialog.askstring("Add Item", "Enter the item name:")
+        name_dialog = CustomDialog(parent, title="Add Item", prompt="Enter the item name:")
+        name = name_dialog.result
         if name is None:
             return
         add_item(barcode, name)
-        pass
+
+
+
+
+
+
+
+
     elif option == 2:
-        barcode = simpledialog.askstring("Remove Item from List", "Enter the barcode of the item to remove:")
-        if barcode is None:
+
+        item_dialog = DropdownDialog(parent, title="Remove Item from List", prompt="Select the item to remove:",
+                                     items=get_all_items())
+
+        selected_item = item_dialog.result
+
+        if selected_item is None:
             return
+
+        barcode = selected_item.split('(')[1].split(',')[0].strip("'")
+
         remove_item(barcode)
-        pass
+
+
+
+
     elif option == 3:
-        staff_name = simpledialog.askstring("Readiness Member", "Name of Issuer:")
+        staff_name_dialog = CustomDialog(parent, title="Readiness Member", prompt="Name of Issuer:")
+        staff_name = staff_name_dialog.result
         if staff_name:
-            id_number = simpledialog.askstring("Check Out Item", "Scan back of member's CAC:")
+            id_number_dialog = CustomDialog(parent, title="Check Out Item", prompt="Scan back of member's CAC:")
+            id_number = id_number_dialog.result
             if id_number is None:
                 return
-            check_out_batch_gui(id_number, staff_name)
-        pass
+            check_out_batch_gui(id_number, staff_name, parent)
+
     elif option == 4:
         show_user_transactions()
-        pass
+
     elif option == 5:
-        id_number = simpledialog.askstring("Search Items by Member", "Scan back of member's CAC number to search for:")
+        id_number_dialog = CustomDialog(parent, title="Search Items by Member", prompt="Scan back of member's CAC number to search for:")
+        id_number = id_number_dialog.result
         if id_number is None:
             return
         search_items_by_user_gui(id_number)
-        pass
 
     elif option == 6:
-        first_name = simpledialog.askstring("Add Member", "Enter the memeber's first name:")
+        first_name_dialog = CustomDialog(parent, title="Add Member", prompt="Enter the member's first name:")
+        first_name = first_name_dialog.result
         if first_name is None:
             return
-        last_name = simpledialog.askstring("Add User", "Enter the Member's last name:")
+        last_name_dialog = CustomDialog(parent, title="Add User", prompt="Enter the Member's last name:")
+        last_name = last_name_dialog.result
         if last_name is None:
             return
-        id_number = simpledialog.askstring("Add User", "Scan back of member's CAC:")
+        id_number_dialog = CustomDialog(parent, title="Add User", prompt="Scan back of member's CAC:")
+        id_number = id_number_dialog.result
         if id_number is None:
             return
         add_user(first_name, last_name, id_number)
-        pass
+
+
+    # For option 7 (add quantity)
+
     elif option == 7:
-        barcode = simpledialog.askstring("Add Quantity", "Enter the barcode:")
-        if barcode is None:
+
+        barcode_dialog = CustomDialog(parent, title="Add Quantity", prompt="Enter the barcode:")
+
+        if barcode_dialog.result is None:
             return
-        quantity = simpledialog.askinteger("Add Quantity", "Enter the amount to add:")
-        if quantity is None:
+
+        barcode = barcode_dialog.result
+
+        quantity_dialog = IntegerDialog(parent, title="Add Quantity", prompt="Enter the amount to add:")
+
+        if quantity_dialog.result is None:
             return
+
+        quantity = int(quantity_dialog.result)
+
         add_quantity(barcode, quantity)
-        pass
+
+
+    # For option 8 (remove quantity)
+
     elif option == 8:
-        barcode = simpledialog.askstring("Remove Quantity", "Enter the barcode:")
-        if barcode is None:
+
+        barcode_dialog = CustomDialog(parent, title="Remove Quantity", prompt="Enter the barcode:")
+
+        if barcode_dialog.result is None:
             return
-        quantity = simpledialog.askinteger("Remove Quantity", "Enter the amount to remove:")
-        if quantity is None:
+
+        barcode = barcode_dialog.result
+
+        quantity_dialog = IntegerDialog(parent, title="Remove Quantity", prompt="Enter the amount to remove:")
+
+        if quantity_dialog.result is None:
             return
+
+        quantity = int(quantity_dialog.result)
+
         remove_quantity(barcode, quantity)
-        pass
+
     elif option == 9:
-        barcode = simpledialog.askstring("Check Quantity", "Enter the barcode:")
+        barcode_dialog = CustomDialog(parent, title="Check Quantity", prompt="Enter the barcode:")
+        barcode = barcode_dialog.result
         if barcode is None:
             return
         check_quantity(barcode)
-        pass
     elif option == 10:
         export_report()
         pass
