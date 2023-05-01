@@ -188,9 +188,9 @@ def check_out_batch_gui(id_number, staff_name, main_window):
         transaction_id = random.randint(1, 1000000)  # Generate a unique transaction_id for this batch
 
         while True:
-            barcode = simpledialog.askstring("Check Out Item", "Scan or enter the barcode (type 'done' to stop):",
-                                             parent=main_window)
-            print(f"Scanned barcode: {barcode}")  # Debugging print statement
+            barcode_dialog = CustomDialog(main_window, title="Check Out Item",
+                                          prompt="Scan or enter the barcode (type 'done' to stop):")
+            barcode = barcode_dialog.show_and_wait()
 
             if barcode is None or barcode.lower() == 'done':
                 break
