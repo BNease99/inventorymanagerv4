@@ -16,6 +16,10 @@ from collections import defaultdict
 import tkinter as tk
 from tkinter import messagebox
 import time
+import datetime
+import pytz
+import pyautogui
+
 
 
 
@@ -33,9 +37,13 @@ class CustomDialog(simpledialog.Dialog):
         self.entry = tk.Entry(master)
         self.entry.grid(row=1)
 
-        # Set focus after a delay of 100ms
+        # Set focus and simulate a click on the entry widget after a delay
         self.entry.focus_set()
-        self.entry.after(100, self.entry.focus_set)
+        self.entry.after(500, self.simulate_click_on_entry)
+
+    def simulate_click_on_entry(self):
+        x, y = self.entry.winfo_rootx(), self.entry.winfo_rooty()
+        pyautogui.click(x + 5, y + 5)  # Click slightly inside the widget
 
     def apply(self):
         if self.input_type == 'integer':
@@ -169,51 +177,6 @@ def remove_item(barcode):
 
     conn.close()
 
-
-
-
-
-
-
-def check_out_batch(id_number):
-    conn = sqlite3.connect(DATABASE)
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM users WHERE id_number=?", (id_number,))
-    user = c.fetchone()
-
-    if user:
-        while True:
-            print("To stop checking out items, type 'done' as the barcode.")
-            barcode = input("Scan or enter the barcode: ")
-
-            if barcode.lower() == 'done':
-                break
-
-            c.execute("SELECT * FROM items WHERE barcode=?", (barcode,))
-            item = c.fetchone()
-
-            if item:
-                current_quantity = item[5]
-                checkout_quantity = 1  # Assume a single item is checked out
-
-                if current_quantity >= checkout_quantity:
-                    new_quantity = current_quantity - checkout_quantity
-                    c.execute("UPDATE items SET quantity=? WHERE barcode=?", (new_quantity, barcode))
-
-                    for _ in range(checkout_quantity):
-                        c.execute("INSERT INTO transactions (barcode, user_id_number, checkout_date) VALUES (?, ?, datetime('now'))", (barcode, id_number))
-
-                    conn.commit()
-                    print(f"{checkout_quantity} item checked out successfully!")
-                else:
-                    print("Not enough quantity available.")
-            else:
-                print("Item not found.")
-    else:
-        print("User not found.")
-
-    conn.close()
 def check_out_batch_gui(id_number, staff_name, main_window):
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
@@ -323,9 +286,6 @@ def create_tables():
 
     conn.commit()
     conn.close()
-
-import datetime
-import pytz
 
 def show_user_transactions():
     conn = sqlite3.connect(DATABASE)
@@ -533,57 +493,6 @@ def remove_quantity(barcode, quantity):
     conn.close()
 
 
-def main_menu():
-    print("Welcome to the Inventory System!")
-    print("Select an option:")
-    print("1. Add Item")
-    print("2. Remove Item")
-    print("3. Check Out Item")
-    print("4. Check In Item")
-    print("5. Search Items by User")
-    print("6. Add User")
-    print("7. Add Quantity")
-    print("8. Remove Quantity")
-    print("9. Check Quantity")
-    print("10. Exit")
-
-def handle_menu_choice(choice):
-    if choice == "1":
-        barcode = input("Enter the barcode: ")
-        name = input("Enter the item name: ")
-        add_item(barcode, name)
-    elif choice == "2":
-        barcode = input("Enter the barcode of the item to remove: ")
-        remove_item(barcode)
-    elif choice == "3":
-        id_number = input("Scan back of CAC: ")
-        check_out_batch(id_number)
-    elif choice == "4":
-        barcode = input("Scan or enter the barcode: ")
-        check_in_item(barcode)
-    elif choice == "5":
-        id_number = input("Scan CAC to search for: ")
-        search_items_by_user(id_number)
-    elif choice == "6":
-        first_name = input("Enter the user's first name: ")
-        last_name = input("Enter the user's last name: ")
-        id_number = input("Scan the back of the user's CAC: ")
-        add_user(first_name, last_name, id_number)
-    elif choice == "7":
-        barcode = input("Enter the barcode: ")
-        quantity = int(input("Enter the quantity to add: "))
-        add_quantity(barcode, quantity)
-    elif choice == "8":
-        barcode = input("Enter the barcode: ")
-        quantity = int(input("Enter the quantity to remove: "))
-        remove_quantity(barcode, quantity)
-    elif choice == "9":
-        barcode = input("Enter the barcode: ")
-        check_quantity(barcode)
-    elif choice == "10":
-        sys.exit()
-    else:
-        print("Invalid choice. Please try again.")
 def export_report():
     folder_path = r"C:\Users\Readi\Documents"
     filename = "inventory_report.xlsx"
@@ -606,65 +515,15 @@ def export_report():
         messagebox.showinfo("Export Report", "No items found in the inventory.")
 
     conn.close()
-def run_inventory_system():
-    create_tables()
-    while True:
-        main_menu()
-        choice = input("Enter your choice: ")
-        handle_menu_choice(choice)
-        time.sleep(1)  # Add a short delay to make the output more readable
-def create_gui():
-    window = tk.Tk()
-    window.title("Inventory System")
-    window.config(bg="steelblue4")
-    # Maximize the window to fullscreen
-    window.attributes("-fullscreen", True)
-
-
-    button_frame = tk.Frame(window, bg="steelblue4")
-    button_frame.pack()
-
-    options = [
-        ("Add Item to inventory", 1),
-        ("Remove Item from inventory", 2),
-        ("Check Out member", 3),
-        ("See Previously Issued", 4),
-        ("Search Items by Member", 5),
-        ("Add Member", 6),
-        ("Add to Current Quantity", 7),
-        ("Remove From Current Quantity", 8),
-        ("Check Quantity Of Item", 9),
-        ("Export Current Inventory to Excel", 10),
-        ("Open old sheet (for tracking older issues)", 11),  # New option
-        ("Exit", 12),  # Adjust the option number
-    ]
-
-
-    # Define the number of columns for the grid layout
-    num_columns = 3
-
-    bold_font = Font(weight="bold")
-
-    for i, (text, option) in enumerate(options):
-        button = tk.Button(button_frame, text=text,
-                           command=lambda option=option, parent=window: on_button_click(option, parent), height=5,
-                           width=42, bg="dim gray", fg="white", font=bold_font)
-        button.grid(row=i // num_columns, column=i % num_columns, padx=10, pady=10)
-
-    # Center the button frame within the window using pack()
-    button_frame.pack(expand=True)
-    button_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-
-
-
-    window.mainloop()
 
 def on_button_click(option, parent):
+    print(f"Option {option} clicked")
     if option == 1:
         barcode_dialog = CustomDialog(parent, title="Add Item", prompt="Enter the barcode:")
         barcode = barcode_dialog.result
         if barcode is None:
             return
+        parent.focus_set()  # Add this line
         name_dialog = CustomDialog(parent, title="Add Item", prompt="Enter the item name:")
         name = name_dialog.result
         if name is None:
@@ -791,6 +650,51 @@ def on_button_click(option, parent):
     elif option == 12:
         sys.exit()
         pass
+
+def create_gui():
+    window = tk.Tk()
+    window.title("Inventory System")
+    window.config(bg="steelblue4")
+    # Maximize the window to fullscreen
+    window.attributes("-fullscreen", True)
+
+
+    button_frame = tk.Frame(window, bg="steelblue4")
+    button_frame.pack()
+
+    options = [
+        ("Add Item to inventory", 1),
+        ("Remove Item from inventory", 2),
+        ("Check Out member", 3),
+        ("See Previously Issued", 4),
+        ("Search Items by Member", 5),
+        ("Add Member", 6),
+        ("Add to Current Quantity", 7),
+        ("Remove From Current Quantity", 8),
+        ("Check Quantity Of Item", 9),
+        ("Export Current Inventory to Excel", 10),
+        ("Open old sheet (for tracking older issues)", 11),  # New option
+        ("Exit", 12),  # Adjust the option number
+    ]
+
+
+    # Define the number of columns for the grid layout
+    num_columns = 3
+
+    bold_font = Font(weight="bold")
+
+    for i, (text, option) in enumerate(options):
+        button = tk.Button(button_frame, text=text,
+                           command=lambda option=option, parent=window: on_button_click(option, parent), height=5,
+                           width=42, bg="dim gray", fg="white", font=bold_font)
+        button.grid(row=i // num_columns, column=i % num_columns, padx=10, pady=10)
+
+    # Center the button frame within the window using pack()
+    button_frame.pack(expand=True)
+    button_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+
+
+
+    window.mainloop()
 if __name__ == "__main__":
     create_gui()
-run_inventory_system()
