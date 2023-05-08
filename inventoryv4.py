@@ -1,21 +1,13 @@
 import sqlite3
 import sys
 import time
-import cv2
-import pyzbar
-import subprocess
 import os
 import pandas as pd
-import tkinter as tk
-from tkinter import messagebox, Menu, filedialog
-from tkinter import simpledialog
 from tkinter.font import Font
 import random
 from tkinter import simpledialog, messagebox, Button, Tk
-from collections import defaultdict
 import tkinter as tk
 from tkinter import messagebox
-import time
 import datetime
 import pytz
 import pyautogui
@@ -188,9 +180,9 @@ def check_out_batch_gui(id_number, staff_name, main_window):
         transaction_id = random.randint(1, 1000000)  # Generate a unique transaction_id for this batch
 
         while True:
-            barcode_dialog = CustomDialog(main_window, title="Check Out Item",
-                                          prompt="Scan or enter the barcode (type 'done' to stop):")
-            barcode = barcode_dialog.show_and_wait()
+            barcode = simpledialog.askstring("Check Out Item", "Scan or enter the barcode (type 'done' to stop):",
+                                             parent=main_window)
+            print(f"Scanned barcode: {barcode}")  # Debugging print statement
 
             if barcode is None or barcode.lower() == 'done':
                 break
@@ -212,7 +204,7 @@ def check_out_batch_gui(id_number, staff_name, main_window):
                         (barcode, id_number, staff_name, checkout_quantity))
 
                     # Show the info message with a delayed auto-close
-                    show_info_with_delay("Check Out Item", f"{checkout_quantity} item(s) added to the checkout list!", delay=2000)
+                    show_info_with_delay("Check Out Item", f"{checkout_quantity} item(s) added to the checkout list!", delay=1000)
                 else:
                     messagebox.showerror("Check Out Item", "Not enough quantity available.")
             else:
@@ -299,7 +291,7 @@ def show_user_transactions():
     JOIN users ON transactions.user_id_number = users.id_number
     JOIN items ON transactions.barcode = items.barcode
     WHERE transactions.checkin_date IS NULL
-    GROUP BY transactions.staff_name, transactions.transaction_id
+    GROUP BY users.id_number, transactions.transaction_id
     ORDER BY transactions.checkout_date DESC
     """)
 
@@ -436,7 +428,7 @@ def check_quantity(barcode):
     item = c.fetchone()
 
     if item:
-        name = item[2]
+        name = item[1]
         quantity = item[4]
         messagebox.showinfo("Check Quantity", f"Item: {name} (Barcode: {barcode})\nQuantity: {quantity}")
     else:
