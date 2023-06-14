@@ -180,7 +180,7 @@ def check_out_batch_gui(id_number, staff_name, main_window):
         transaction_id = random.randint(1, 1000000)  # Generate a unique transaction_id for this batch
 
         while True:
-            barcode = simpledialog.askstring("Check Out Item", "Scan or enter the barcode (type 'done' to stop):",
+            barcode = simpledialog.askstring("Check Out Item", "Scan or enter the barcode (Click Cancel when done):",
                                              parent=main_window)
             print(f"Scanned barcode: {barcode}")  # Debugging print statement
 
@@ -632,9 +632,9 @@ def on_button_click(option, parent):
     elif option == 10:
         export_report()
         pass
-    elif option == 11:  # Open Excel File
-        file_path = r"C:\Users\Readi\Documents\apr27.xlsm"  # Replace with the actual file path
-        if os.path.isfile(file_path) and file_path.endswith(".xlsm"):
+    elif option == 11:  # Open EXE File
+        file_path = r"C:\Program Files\DB Browser for SQLite\DB Browser for SQLite.exe"  # Replace with the actual file path
+        if os.path.isfile(file_path) and file_path.endswith(".exe"):
             os.startfile(file_path)
         else:
             messagebox.showerror("Error", "Invalid file path or file format.")
@@ -642,7 +642,6 @@ def on_button_click(option, parent):
     elif option == 12:
         sys.exit()
         pass
-
 def create_gui():
     window = tk.Tk()
     window.title("Inventory System")
@@ -665,7 +664,7 @@ def create_gui():
         ("Remove From Current Quantity", 8),
         ("Check Quantity Of Item", 9),
         ("Export Current Inventory to Excel", 10),
-        ("Open old sheet (for tracking older issues)", 11),  # New option
+        ("Open Database manager", 11),  # New option
         ("Exit", 12),  # Adjust the option number
     ]
 
